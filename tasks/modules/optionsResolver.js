@@ -1,3 +1,5 @@
+/// <reference path="../../defs/tsd.d.ts"/>
+/// <reference path="./interfaces.d.ts"/>
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
 var defaults_1 = require("./defaults");
@@ -6,8 +8,12 @@ var _ = require("lodash");
 var es6_promise_1 = require("es6-promise");
 var visualStudioOptionsResolver_1 = require("./visualStudioOptionsResolver");
 var tsconfig_1 = require("./tsconfig");
+// Compiler Options documentation:
+// https://github.com/Microsoft/TypeScript-Handbook/blob/master/pages/Compiler%20Options.md
 var propertiesFromTarget = ['amdloader', 'baseDir', 'html', 'htmlOutDir', 'htmlOutDirFlatten', 'reference', 'testExecute', 'tsconfig',
-    'templateCache', 'vs', 'watch'], propertiesFromTargetOptions = ['additionalFlags',
+    'templateCache', 'vs', 'watch'], 
+// supported via other code: out, outDir, outFile, project
+propertiesFromTargetOptions = ['additionalFlags',
     'allowJs',
     'allowSyntheticDefaultImports',
     'allowUnreachableCode',
@@ -33,6 +39,7 @@ var propertiesFromTarget = ['amdloader', 'baseDir', 'html', 'htmlOutDir', 'htmlO
     'failOnTypeErrors',
     'fast',
     'forceCompileRegex',
+    /* help purposefully not supported. */
     'forceConsistentCasingInFileNames',
     'htmlModuleTemplate',
     'htmlOutDir',
@@ -42,6 +49,7 @@ var propertiesFromTarget = ['amdloader', 'baseDir', 'html', 'htmlOutDir', 'htmlO
     'importHelpers',
     'inlineSourceMap',
     'inlineSources',
+    /* init purposefully not supported. */
     'isolatedModules',
     'jsx',
     'jsxFactory',
@@ -67,12 +75,14 @@ var propertiesFromTarget = ['amdloader', 'baseDir', 'html', 'htmlOutDir', 'htmlO
     'noStrictGenericChecks',
     'noUnusedLocals',
     'noUnusedParameters',
+    /* paths is purposefully not supported - requires use of tsconfig.json */
     'preserveConstEnums',
     'preserveSymlinks',
     'pretty',
     'reactNamespace',
     'removeComments',
     'rootDir',
+    /* rootDirs is purposefully not supported - requires use of tsconfig.json */
     'skipDefaultLibCheck',
     'skipLibCheck',
     'sourceMap',
@@ -89,6 +99,8 @@ var propertiesFromTarget = ['amdloader', 'baseDir', 'html', 'htmlOutDir', 'htmlO
     'tsCacheDir',
     'types',
     'typeRoots',
+    /* version is purposefully not supported. */
+    /* watch is purposefully not supported. */
     'verbose'], delayTemplateExpansion = ['htmlModuleTemplate', 'htmlVarTemplate', 'htmlOutputTemplate'];
 var templateProcessor = null;
 var globExpander = null;
@@ -101,6 +113,7 @@ function emptyGlobExpander(globs) {
 }
 emptyGlobExpander.isStub = true;
 function emptyVerboseLogger(logText) {
+    // noop.
 }
 function resolveAsync(rawTaskOptions, rawTargetOptions, targetName, resolvedFiles, theTemplateProcessor, theGlobExpander, theVerboseLogger) {
     if (targetName === void 0) { targetName = ''; }
@@ -254,6 +267,7 @@ function resolveAndWarnOnConfigurationIssues(task, target, targetName) {
         }
     }
     function checkLocations(task, configName) {
+        // todo: clean this up.  The top and bottom sections are largely the same.
         if (task) {
             for (var propertyName in task) {
                 if (propertiesFromTarget.indexOf(propertyName) === -1 && propertyName !== 'options') {
@@ -391,6 +405,7 @@ function copyCompilationTasks(options, resolvedFiles, outputInfo) {
         if ('dest' in resolvedFiles[i] && resolvedFiles[i].dest) {
             var dest = void 0;
             if (_.isArray(resolvedFiles[i].dest)) {
+                // using an array for dest is not supported.  Only take first element.
                 dest = resolvedFiles[i].dest[0];
             }
             else {

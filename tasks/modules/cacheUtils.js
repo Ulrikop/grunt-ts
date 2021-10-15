@@ -1,11 +1,23 @@
 "use strict";
+/// <reference path="../../defs/tsd.d.ts"/>
 Object.defineProperty(exports, "__esModule", { value: true });
+// Source based on : https://github.com/tschaub/grunt-newer/blob/master/lib/util.js
 var fs = require("fs");
 var _ = require("lodash");
 var path = require("path");
 var crypto = require("crypto");
 var grunt = require('grunt');
 var rimraf = require('rimraf');
+//////////////////////
+//  Basic algo:
+//        - We have a timestamp file per target.
+//        - We use the mtime of this file to filter out
+//              new files for this target
+//        - Finally we can update the timestamp file with new time
+/////////////////////
+//////////////////////////////
+// File stamp based filtering
+//////////////////////////////
 function getStampPath(targetName, cacheDir) {
     return path.join(cacheDir, targetName, 'timestamp');
 }
@@ -15,6 +27,7 @@ function getLastSuccessfullCompile(targetName, cacheDir) {
         return fs.statSync(stampFile).mtime;
     }
     catch (err) {
+        // task has never succeeded before
         return new Date(0);
     }
 }
@@ -34,10 +47,20 @@ function filterPathsByTime(paths, targetName, cacheDir) {
     return getFilesNewerThan(paths, time);
 }
 exports.filterPathsByTime = filterPathsByTime;
+//////////////////////////////
+// File hash based filtering
+//////////////////////////////
+/**
+ * Get path to cached file hash for a target.
+ * @return {string} Path to hash.
+ */
 function getHashPath(filePath, targetName, cacheDir) {
     var hashedName = path.basename(filePath) + '-' + crypto.createHash('md5').update(filePath).digest('hex');
     return path.join(cacheDir, targetName, 'hashes', hashedName);
 }
+/**
+ * Get an existing hash for a file (if it exists).
+ */
 function getExistingHash(filePath, targetName, cacheDir) {
     var hashPath = getHashPath(filePath, targetName, cacheDir);
     var exists = fs.existsSync(hashPath);
@@ -46,12 +69,22 @@ function getExistingHash(filePath, targetName, cacheDir) {
     }
     return fs.readFileSync(hashPath).toString();
 }
+/**
+ * Generate a hash (md5sum) of a file contents.
+ * @param {string} filePath Path to file.
+ */
 function generateFileHash(filePath) {
     var md5sum = crypto.createHash('md5');
     var data = fs.readFileSync(filePath);
     md5sum.update(data);
     return md5sum.digest('hex');
 }
+/**
+ * Filter files based on hashed contents.
+ * @param {Array.<string>} paths List of paths to files.
+ * @param {string} targetName Target name.
+ * @param {string} cacheDir Cache directory.
+ */
 function filterPathsByHash(filePaths, targetName, cacheDir) {
     var filtered = _.filter(filePaths, function (filePath) {
         var previous = getExistingHash(filePath, targetName, cacheDir);
@@ -67,14 +100,25 @@ function updateHashes(filePaths, targetName, cacheDir) {
         grunt.file.write(hashPath, hash);
     });
 }
+//////////////////////////////
+// External functions
+//////////////////////////////
+/**
+ * Filter a list of files by target
+ */
 function getNewFilesForTarget(paths, targetName, cacheDir) {
     var step1 = filterPathsByTime(paths, targetName, cacheDir);
     var step2 = filterPathsByHash(step1, targetName, cacheDir);
     return step2;
 }
 exports.getNewFilesForTarget = getNewFilesForTarget;
+/**
+ * Update the timestamp for a target to denote last successful compile
+ */
 function compileSuccessfull(paths, targetName, cacheDir) {
+    // update timestamp
     grunt.file.write(getStampPath(targetName, cacheDir), '');
+    // update filehash
     updateHashes(paths, targetName, cacheDir);
 }
 exports.compileSuccessfull = compileSuccessfull;

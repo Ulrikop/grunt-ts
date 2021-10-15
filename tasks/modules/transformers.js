@@ -1,4 +1,6 @@
 "use strict";
+/// <reference path="../../defs/tsd.d.ts"/>
+/// <reference path="./interfaces.d.ts"/>
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
         ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
@@ -15,11 +17,16 @@ var path = require("path");
 var grunt = require("grunt");
 var _ = require("lodash");
 var utils = require("./utils");
+// Setup when transformers are triggered
 var currentTargetFiles;
 var currentTargetDirs;
+// Based on name
+// if a filename matches we return a filepath
+// If a foldername matches we return a folderpath
 function getImports(currentFilePath, name, targetFiles, targetDirs, getIndexIfDir) {
     if (getIndexIfDir === void 0) { getIndexIfDir = true; }
     var files = [];
+    // Test if any filename matches
     var targetFile = _.find(targetFiles, function (targetFile) {
         return path.basename(targetFile) === name
             || path.basename(targetFile, '.d.ts') === name
@@ -28,43 +35,55 @@ function getImports(currentFilePath, name, targetFiles, targetDirs, getIndexIfDi
     if (targetFile) {
         files.push(targetFile);
     }
+    // It might be worthwhile to cache this lookup
+    // i.e. have a 'foldername':folderpath map passed in
+    // Test if dirname matches
     var targetDir = _.find(targetDirs, function (targetDir) {
         return path.basename(targetDir) === name;
     });
     if (targetDir) {
         var possibleIndexFilePath = path.join(targetDir, 'index.ts');
+        // If targetDir has an index file AND this is not that file then
+        // use index.ts instead of all the files in the directory
         if (getIndexIfDir
             && fs.existsSync(possibleIndexFilePath)
             && path.relative(currentFilePath, possibleIndexFilePath) !== '') {
             files.push(path.join(targetDir, 'index.ts'));
         }
+        // Otherwise we lookup all the files that are in the folder
         else {
             var filesInDir = utils.getFiles(targetDir, function (filename) {
+                // exclude current file
                 if (path.relative(currentFilePath, filename) === '') {
                     return true;
                 }
-                return path.extname(filename)
+                return path.extname(filename) // must have extension : do not exclude directories
                     && (!_.endsWith(filename, '.ts') || _.endsWith(filename, '.d.ts'))
-                    && !fs.lstatSync(filename).isDirectory();
+                    && !fs.lstatSync(filename).isDirectory(); // for people that name directories with dots
             });
-            filesInDir.sort();
+            filesInDir.sort(); // Sort needed to increase reliability of codegen between runs
             files = files.concat(filesInDir);
         }
     }
     return files;
 }
+// Algo
+// Notice that the file globs come as
+// test/fail/ts/deep/work.ts
+// So simply get dirname recursively till reach root '.'
 function getTargetFolders(targetFiles) {
     var folders = {};
     _.forEach(targetFiles, function (targetFile) {
         var dir = path.dirname(targetFile);
         while (dir !== '.' && !(dir in folders)) {
+            // grunt.log.writeln(dir);
             folders[dir] = true;
             dir = path.dirname(dir);
         }
     });
     return Object.keys(folders);
 }
-var BaseTransformer = (function () {
+var BaseTransformer = /** @class */ (function () {
     function BaseTransformer(key, variableSyntax) {
         this.key = key;
         this.match = new RegExp(utils.format(BaseTransformer.tsTransformerMatch, key));
@@ -73,6 +92,8 @@ var BaseTransformer = (function () {
         this.syntaxError = '/// Invalid syntax for ts:' + this.key + '=' + variableSyntax + ' ' + this.signatureGenerated;
     }
     BaseTransformer.prototype.tripleSlashTS = function () {
+        // This is a function and broken into two strings to prevent the transformers module from
+        // transforming *itself* (a-la Skynet).
         return '//' + '/ts:';
     };
     BaseTransformer.prototype.isGenerated = function (line) {
@@ -85,10 +106,14 @@ var BaseTransformer = (function () {
         return BaseTransformer.tsSignatureMatch.test(line);
     };
     BaseTransformer.tsSignatureMatch = /\/\/\/\s*ts\:/;
+    // equals sign is optional because we want to match on the signature regardless of any errors,
+    // transformFiles() checks that the equals sign exists (by checking for the first matched capture group)
+    // and fails if it is not found.
     BaseTransformer.tsTransformerMatch = '^///\\s*ts:{0}(=?)(.*)';
     return BaseTransformer;
 }());
-var BaseImportExportTransformer = (function (_super) {
+// This is a separate class from BaseTransformer to make it easier to add non import/export transforms in the future
+var BaseImportExportTransformer = /** @class */ (function (_super) {
     __extends(BaseImportExportTransformer, _super);
     function BaseImportExportTransformer(key, variableSyntax, template, getIndexIfDir, removeExtensionFromFilePath) {
         var _this = _super.call(this, key, variableSyntax) || this;
@@ -110,6 +135,7 @@ var BaseImportExportTransformer = (function (_super) {
             if (imports.length) {
                 _.forEach(imports, function (completePathToFile) {
                     var filename = requestedVariableName || path.basename(path.basename(completePathToFile, '.ts'), '.d');
+                    // If filename is index, we replace it with dirname:
                     if (filename.toLowerCase() === 'index') {
                         filename = path.basename(path.dirname(completePathToFile));
                     }
@@ -130,31 +156,38 @@ var BaseImportExportTransformer = (function (_super) {
     };
     return BaseImportExportTransformer;
 }(BaseTransformer));
-var ImportTransformer = (function (_super) {
+var ImportTransformer = /** @class */ (function (_super) {
     __extends(ImportTransformer, _super);
     function ImportTransformer() {
         return _super.call(this, 'import', '<fileOrDirectoryName>[,<variableName>]', _.template('import <%=filename%> = require(\'<%= pathToFile %>\');'), true, true) || this;
     }
     return ImportTransformer;
 }(BaseImportExportTransformer));
-var ExportTransformer = (function (_super) {
+var ExportTransformer = /** @class */ (function (_super) {
     __extends(ExportTransformer, _super);
     function ExportTransformer(eol) {
-        var _this = _super.call(this, 'export', '<fileOrDirectoryName>[,<variableName>]', _.template('import <%=filename%>_file = require(\'<%= pathToFile %>\'); <%= signatureGenerated %>' + eol +
+        var _this = 
+        // This code is same as import transformer
+        // One difference : we do not short circuit to `index.ts` if found
+        _super.call(this, 'export', '<fileOrDirectoryName>[,<variableName>]', 
+        // workaround for https://github.com/Microsoft/TypeScript/issues/512
+        _.template('import <%=filename%>_file = require(\'<%= pathToFile %>\'); <%= signatureGenerated %>' + eol +
             'export var <%=filename%> = <%=filename%>_file;'), false, true) || this;
         _this.eol = eol;
         return _this;
     }
     return ExportTransformer;
 }(BaseImportExportTransformer));
-var ReferenceTransformer = (function (_super) {
+var ReferenceTransformer = /** @class */ (function (_super) {
     __extends(ReferenceTransformer, _super);
     function ReferenceTransformer() {
+        // This code is same as export transformer
+        // also we preserve .ts file extension
         return _super.call(this, 'ref', '<fileOrDirectoryName>', _.template('/// <reference path="<%= pathToFile %>"/>'), false, false) || this;
     }
     return ReferenceTransformer;
 }(BaseImportExportTransformer));
-var UnknownTransformer = (function (_super) {
+var UnknownTransformer = /** @class */ (function (_super) {
     __extends(UnknownTransformer, _super);
     function UnknownTransformer() {
         var _this = _super.call(this, '(.*)', '') || this;
@@ -168,9 +201,13 @@ var UnknownTransformer = (function (_super) {
     };
     return UnknownTransformer;
 }(BaseTransformer));
+// This code fixes the line encoding to be per os.
+// I think it is the best option available at the moment.
+// I am open for suggestions
 function transformFiles(changedFiles, targetFiles, options) {
     currentTargetDirs = getTargetFolders(targetFiles);
     currentTargetFiles = targetFiles;
+    ///////////////////////////////////// transformation
     var transformers = [
         new ImportTransformer(),
         new ExportTransformer((options.newLine || utils.eol)),
@@ -179,6 +216,7 @@ function transformFiles(changedFiles, targetFiles, options) {
     ];
     _.forEach(changedFiles, function (fileToProcess) {
         var contents = fs.readFileSync(fileToProcess).toString().replace(/^\uFEFF/, '');
+        // If no signature don't bother with this file
         if (!BaseTransformer.containsTransformSignature(contents)) {
             return;
         }
@@ -186,13 +224,20 @@ function transformFiles(changedFiles, targetFiles, options) {
         var outputLines = [];
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
+            //// Debugging
+            // grunt.log.writeln('line'.green);
+            // grunt.log.writeln(line);
+            // Skip generated lines as these will get regenerated
             if (_.some(transformers, function (transformer) { return transformer.isGenerated(line); })) {
                 continue;
             }
+            // Directive line
             if (_.some(transformers, function (transformer) {
                 var match = transformer.matches(line);
                 if (match) {
+                    // The code gen directive line automatically qualifies
                     outputLines.push(line);
+                    // pass transform settings to transform (match[1] is the equals sign, ensure it exists but otherwise ignore it)
                     outputLines.push.apply(outputLines, transformer.transform(fileToProcess, match[1] && match[2] && match[2].trim()));
                     return true;
                 }
@@ -200,6 +245,7 @@ function transformFiles(changedFiles, targetFiles, options) {
             })) {
                 continue;
             }
+            // Lines not generated or not directives
             outputLines.push(line);
         }
         var transformedContent = outputLines.join(utils.eol);

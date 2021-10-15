@@ -1,4 +1,5 @@
 "use strict";
+/// <reference path="../defs/tsd.d.ts" />
 Object.defineProperty(exports, "__esModule", { value: true });
 var grunt = require('grunt');
 var testHelpers_1 = require("./testHelpers");
@@ -58,7 +59,7 @@ exports.tests = {
         test.done();
     },
     fail: function (test) {
-        testHelpers_1.testDirectory(test, 'fail');
+        testHelpers_1.testDirectory(test, 'fail'); // tested to make sure transformers still run for failing task
         test.done();
     },
     es6: function (test) {

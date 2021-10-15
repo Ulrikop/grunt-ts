@@ -1,4 +1,5 @@
 "use strict";
+/// <reference path="../defs/tsd.d.ts" />
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("fs");
 var path = require("path");
@@ -7,6 +8,7 @@ var utils = require("../tasks/modules/utils");
 var _ = require("lodash");
 var testHelpers_1 = require("./testHelpers");
 var grunt = require('grunt');
+// inline strings for newline configs
 var crlf_newline_tsconfig_json_1 = require("./tsconfig_artifact/newlineConfigs/crlf_newline_tsconfig.json");
 var crlf_newline_tsconfig_expected_json_1 = require("./tsconfig_artifact/newlineConfigs/crlf_newline_tsconfig.expected.json");
 var lf_newline_tsconfig_json_1 = require("./tsconfig_artifact/newlineConfigs/lf_newline_tsconfig.json");
@@ -399,6 +401,7 @@ exports.tests = {
             }).catch(function (err) { test.ifError(err); test.done(); });
         },
         "outDir works in combination with tsconfig": function (test) {
+            // as reported by @gilamran in https://github.com/TypeStrong/grunt-ts/issues/312
             var config = {
                 options: {
                     target: 'es5'
@@ -422,6 +425,7 @@ exports.tests = {
             }).catch(function (err) { test.ifError(err); test.done(); });
         },
         "out overrides out in tsconfig": function (test) {
+            // as reported by @jkanchelov in https://github.com/TypeStrong/grunt-ts/issues/409
             var config = {
                 options: {
                     target: 'es5'
@@ -438,6 +442,7 @@ exports.tests = {
             }).catch(function (err) { test.ifError(err); test.done(); });
         },
         "out overrides outFile in tsconfig": function (test) {
+            // as reported by @jkanchelov in https://github.com/TypeStrong/grunt-ts/issues/409
             var config = {
                 options: {
                     target: 'es5'
@@ -558,6 +563,7 @@ exports.tests = {
                 });
             };
             try {
+                // write inline string configs to test config files
                 fs.writeFileSync('./test/tsconfig/crlf_newline_tsconfig.json', crlf_newline_tsconfig_json_1.crlf_newline_tsconfig_json);
                 fs.writeFileSync('./test/tsconfig/crlf_newline_tsconfig.expected.json', crlf_newline_tsconfig_expected_json_1.crlf_newline_tsconfig_expected_json);
                 fs.writeFileSync('./test/tsconfig/lf_newline_tsconfig.json', lf_newline_tsconfig_json_1.lf_newline_tsconfig_json);
@@ -657,7 +663,7 @@ exports.tests = {
                 }
             };
             if (!fs.existsSync('tasks/scratch.js')) {
-                fs.writeFileSync('tasks/scratch.js', '');
+                fs.writeFileSync('tasks/scratch.js', ''); // ensure there is a scratch file there just in case it hasn't been compiled.
             }
             var result = or.resolveAsync(config, config.build, "build", [], null, grunt.file.expand).then(function (result) {
                 test.strictEqual(result.CompilationTasks.length, 1, "expected a compilation task");
@@ -792,6 +798,7 @@ exports.tests = {
         "most basic tsconfig with true works": function (test) {
             test.expect(12);
             var result = or.resolveAsync(null, getConfig("tsconfig has true")).then(function (result) {
+                // NOTE: With tsconfig: true, this depends on the actual grunt-ts tsconfig so technically it could be wrong in the future.
                 test.strictEqual(result.tsconfig.tsconfig, path.join(path.resolve('.'), 'tsconfig.json'));
                 test.strictEqual(result.target, 'es5');
                 test.strictEqual(result.module, 'commonjs');
@@ -896,6 +903,7 @@ exports.tests = {
         "paths written to filesGlob are resolved first": function (test) {
             test.expect(4);
             var cfg = getConfig("minimalist");
+            // this assumes the test gruntfile which uses the {% and %} delimiters.
             cfg.src = ["./test/{%= grunt.pathsFilesGlobProperty %}/a*.ts"];
             cfg.tsconfig = {
                 tsconfig: 'test/tsconfig/simple_filesGlob_tsconfig.json',
